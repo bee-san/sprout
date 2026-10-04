@@ -16,18 +16,18 @@
     <TextView android:id="@+id/widget_hint" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:text="Add activities in Sprout to begin." android:textSize="13sp" android:textColor="#53624B" />
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp">
-        <TextView android:id="@+id/widget_a1" android:layout_width="0dp" android:layout_weight="1" android:layout_height="44dp"
+        <TextView android:id="@+id/widget_a1" android:text="Deep work" android:layout_width="0dp" android:layout_weight="1" android:layout_height="44dp"
             android:layout_marginEnd="4dp" android:background="@drawable/widget_button" android:gravity="center"
             android:textColor="#355E49" android:maxLines="1" android:ellipsize="end" />
-        <TextView android:id="@+id/widget_a2" android:layout_width="0dp" android:layout_weight="1" android:layout_height="44dp"
+        <TextView android:id="@+id/widget_a2" android:text="Reading" android:layout_width="0dp" android:layout_weight="1" android:layout_height="44dp"
             android:layout_marginStart="4dp" android:background="@drawable/widget_button" android:gravity="center"
             android:textColor="#355E49" android:maxLines="1" android:ellipsize="end" />
     </LinearLayout>
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp">
-        <TextView android:id="@+id/widget_a3" android:layout_width="0dp" android:layout_weight="1" android:layout_height="44dp"
+        <TextView android:id="@+id/widget_a3" android:text="Learning" android:layout_width="0dp" android:layout_weight="1" android:layout_height="44dp"
             android:layout_marginEnd="4dp" android:background="@drawable/widget_button" android:gravity="center"
             android:textColor="#355E49" android:maxLines="1" android:ellipsize="end" />
-        <TextView android:id="@+id/widget_a4" android:layout_width="0dp" android:layout_weight="1" android:layout_height="44dp"
+        <TextView android:id="@+id/widget_a4" android:text="A little walk" android:layout_width="0dp" android:layout_weight="1" android:layout_height="44dp"
             android:layout_marginStart="4dp" android:background="@drawable/widget_button" android:gravity="center"
             android:textColor="#355E49" android:maxLines="1" android:ellipsize="end" />
     </LinearLayout>

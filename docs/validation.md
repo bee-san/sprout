@@ -6,7 +6,7 @@ Checked on 4 October 2026 using Flutter **3.44.4**, Dart **3.12.2**, JDK 17 and 
 | --- | --- |
 | Flutter analysis | No issues |
 | Dart formatting for `lib/` and `test/` | Clean |
-| Automated tests, including the private local Toggl check | All 25 passed |
+| Automated tests, including the private local Toggl check | All 26 passed |
 | Toggl export supplied locally by the owner | All 712 rows imported; total duration exactly 2,868,154 seconds; repeating the import adds zero rows |
 | Import then sync to a second replica | All 712 entries converge through the Drive protocol simulator with descriptions/tags/client/billable metadata retained |
 | Responsive Flutter UI | Track and Reports checked at 320, 390 and 1360 logical pixels, with bundled fonts and Material icons |
@@ -18,7 +18,9 @@ Checked on 4 October 2026 using Flutter **3.44.4**, Dart **3.12.2**, JDK 17 and 
 | Hosted Android / Windows builds | First public workflow passed all three jobs; run linked below |
 | Android timer widget | Added through Pixel Launcher; activity start and session stop both persist in the app |
 | Android process recovery | Editing retains a running timer; killing the process and relaunching retains the same session ID and start timestamp |
-| Android document export | JSON backup saved through the system picker; all 4 synthetic activities and 14 snapshot sessions present |
+| Android backup/restore | JSON exported through the picker; after a fresh signed install, all 4 activities and 14 sessions restore successfully |
+| Android weekly stats widget | Added through Pixel Launcher; shows 14 sessions, date-clipped totals and an update timestamp |
+| Windows preview upgrade | Reopens the original database in place and preserves installation identity; regression test passes |
 
 ## What the tests exercise
 
@@ -36,7 +38,7 @@ The owner's CSV stays outside the repository. Its extra validation test is opt-i
 SPROUT_TOGGL_CSV=/path/to/private-export.csv flutter test test/portability_test.dart
 ```
 
-Normal public CI runs the other 24 tests without that private file.
+Normal public CI runs the other 25 tests without that private file.
 
 ## Device and account boundaries
 
@@ -52,6 +54,6 @@ Published Android preview APKs use this repository’s stable release key, store
 
 Public repository: [bee-san/sprout](https://github.com/bee-san/sprout).
 
-The [first hosted workflow](https://github.com/bee-san/sprout/actions/runs/37195228158) passed checks, ARM64/x86_64 Android builds and the native Windows build for `b2bd782f9ce7528ed8124dd3fc3540391a3ee643`. Its Windows ZIP was downloaded and CRC-checked. Packaging was then improved to bundle the compiler runtime DLLs and check startup/SQLite integrity from the extracted archive; that check runs in the current main workflow.
+The [first hosted workflow](https://github.com/bee-san/sprout/actions/runs/37195228158) passed checks, ARM64/x86_64 Android builds and the native Windows build for `b2bd782f9ce7528ed8124dd3fc3540391a3ee643`. Its Windows ZIP was downloaded and CRC-checked. The [second Windows build](https://github.com/bee-san/sprout/actions/runs/37195910253) bundles the compiler runtime DLLs and passed startup/SQLite integrity checks from the extracted archive. The final workflow also includes the font license in the Android/Windows app assets and retains the original Windows database path for existing installations.
 
 The README status badge follows the current main branch. The build's source SHA and artifacts are available on each workflow run.

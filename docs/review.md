@@ -14,6 +14,7 @@ Sprout starts from the user's Timebud 0.1.0 Flutter preview. This review led to 
 | Drive requests lacked recovery for expired authorization and temporary API failures | Refresh once after 401 and retry safe GET/PATCH requests after 429/5xx | `test/sync_recovery_test.dart` |
 | Sync races, corrupted journals and stale deletions needed stronger evidence | Test interrupted requests, in-flight local edits, pagination, validation, conflict convergence and deletion propagation | Drive simulator tests; both replicas converge without reviving deleted records |
 | CSV output could be interpreted as formulas by spreadsheet software | Quote fields and prefix formula-like content | `test/portability_test.dart` |
+| Renaming the Windows product changed its data directory | Reuse the legacy database in place and share the original instance lock | Upgrade regression preserves history and device identity in `test/store_test.dart` |
 | Windows ZIP omitted Visual C++ runtime DLLs | Bundle release compiler runtimes with CMake and check startup from the extracted archive | Hosted workflow package assertions and Windows persistence check |
 | The preview lacked portable local backups | Add JSON snapshots and additive restore; freeze active timers in backups | Backup metadata and repeat-restore tests |
 

@@ -10,6 +10,20 @@ import 'package:uuid/uuid.dart';
 
 import 'model.dart';
 
+/// Keep the original Windows preview's history and installation identity.
+String resolveDatabasePath(String supportPath, {bool legacyWindows = false}) {
+  final current = path.join(supportPath, 'timebud.sqlite');
+  if (legacyWindows && !File(current).existsSync()) {
+    final legacy = path.join(
+      path.dirname(supportPath),
+      'Timebud',
+      'timebud.sqlite',
+    );
+    if (File(legacy).existsSync()) return legacy;
+  }
+  return current;
+}
+
 class Store {
   Store(this.db, this.deviceId, this.deviceName);
   final Database db;
@@ -26,9 +40,9 @@ class Store {
     factory ??= databaseFactorySqflitePlugin;
     final dbPath =
         databasePath ??
-        path.join(
+        resolveDatabasePath(
           (await getApplicationSupportDirectory()).path,
-          'timebud.sqlite',
+          legacyWindows: Platform.isWindows,
         );
     final db = await factory.openDatabase(
       dbPath,

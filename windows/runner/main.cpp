@@ -7,9 +7,10 @@
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
-  HANDLE single_instance = CreateMutexW(nullptr, TRUE, L"Local\\Sprout-0.1");
+  HANDLE single_instance = CreateMutexW(nullptr, TRUE, L"Local\\Timebud-0.1");
   if (!single_instance || GetLastError() == ERROR_ALREADY_EXISTS) {
     HWND existing = FindWindowW(nullptr, L"Sprout");
+    if (!existing) existing = FindWindowW(nullptr, L"Timebud");
     if (existing) {
       ShowWindow(existing, SW_RESTORE);
       SetForegroundWindow(existing);

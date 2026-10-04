@@ -80,7 +80,7 @@ jobs:
         run: |
           $sproutProbe = Join-Path $env:RUNNER_TEMP 'sprout-portable-check'
           Expand-Archive sprout-windows.zip -DestinationPath $sproutProbe
-          foreach ($required in @('sprout.exe', 'flutter_windows.dll', 'sqlite3.dll', 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll', 'data/app.so')) {
+          foreach ($required in @('sprout.exe', 'flutter_windows.dll', 'sqlite3.dll', 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll', 'LICENSE-Sprout.txt', 'LICENSE-Nunito.txt', 'data/flutter_assets/assets/fonts/OFL.txt', 'data/app.so')) {
             if (-not (Test-Path (Join-Path $sproutProbe $required))) { throw "Missing portable file: $required" }
           }
           $sproutProcess = Start-Process (Join-Path $sproutProbe 'sprout.exe') -ArgumentList '--tray' -WorkingDirectory $sproutProbe -PassThru

@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:path/path.dart' as path;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:sprout/controller.dart';
@@ -106,6 +108,58 @@ void main() {
       tracker.dispose();
     },
   );
+  test(
+    'Windows upgrade reuses the legacy database and identity without copying',
+    () async {
+      final root = await Directory.systemTemp.createTemp('sprout-upgrade-');
+      Store? legacy;
+      Store? reopened;
+      try {
+        final oldDirectory = await Directory(
+          path.join(root.path, 'Timebud'),
+        ).create();
+        final newDirectory = await Directory(
+          path.join(root.path, 'Sprout'),
+        ).create();
+        final oldPath = path.join(oldDirectory.path, 'timebud.sqlite');
+        legacy = await Store.open(
+          factory: databaseFactoryFfiNoIsolate,
+          databasePath: oldPath,
+        );
+        final device = legacy.deviceId;
+        await legacy.write('activity', 'saved', {
+          'id': 'saved',
+          'name': 'Saved work',
+          'color': 1,
+        });
+        await legacy.close();
+        legacy = null;
+        final selected = resolveDatabasePath(
+          newDirectory.path,
+          legacyWindows: true,
+        );
+        expect(selected, oldPath);
+        reopened = await Store.open(
+          factory: databaseFactoryFfiNoIsolate,
+          databasePath: selected,
+        );
+        expect(reopened.deviceId, device);
+        expect((await reopened.activities()).single.name, 'Saved work');
+        final newPath = path.join(newDirectory.path, 'timebud.sqlite');
+        await File(newPath).writeAsString('Existing Sprout database');
+        expect(
+          resolveDatabasePath(newDirectory.path, legacyWindows: true),
+          newPath,
+        );
+        expect(resolveDatabasePath(newDirectory.path), newPath);
+      } finally {
+        await legacy?.close();
+        await reopened?.close();
+        await root.delete(recursive: true);
+      }
+    },
+  );
+
   test('new local edits advance past imported clocks', () async {
     await a.merge([
       const Mutation(

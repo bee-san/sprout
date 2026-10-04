@@ -29,8 +29,8 @@ understand a lot, and keep your own data. No subscription or hosted backend.
 
 ## Get Sprout
 
-The [build workflow](https://github.com/bee-san/sprout/actions/workflows/build.yml)
-produces `sprout-android` APKs and a `sprout-windows` portable ZIP. Open a
+Download the [0.2.0 preview](https://github.com/bee-san/sprout/releases/tag/0.2.0), or use the
+[build workflow](https://github.com/bee-san/sprout/actions/workflows/build.yml), which produces `sprout-android` APKs and a `sprout-windows` portable ZIP. Open a
 successful run and download its artifacts. Android ARM64 is for modern phones;
 the x86_64 APK is for emulators. Windows needs the entire extracted ZIP,
 including its DLLs and `data` folder. Run `sprout.exe`.
@@ -184,7 +184,10 @@ executable is stored with the session and can sync to your own Drive app-data ar
 Tokens stay in platform secure storage, outside the database and exports.
 
 The internal Android package, database filename and Drive journal prefix retain
-`timebud` for compatibility with the original preview. The visible app is Sprout.
+`timebud` for compatibility with the original preview. On Windows, Sprout reuses
+an existing Timebud database in place when it has no new database, preserving
+history and device identity. Its shared instance lock prevents both previews
+from opening that database together. The visible app is Sprout.
 
 ## Validation
 
