@@ -21,7 +21,7 @@ understand a lot, and keep your own data. No subscription or hosted backend.
 - Day, week, month, all-time and custom date ranges, previous/next navigation,
   search, activity and billable filters, and CSV exports.
 - **Toggl Track import**, including quoted/multiline descriptions and repeat-import protection.
-- Portable JSON backups and safe, additive restore.
+- Verified JSON backups, automatic recovery copies and safe, additive restore.
 - **Android home-screen widgets:** Timer & activities and Weekly stats.
 - Windows executable rules, focus/background tracking, optional idle pausing,
   lock/sleep handling, tray controls, close-to-tray, and startup at login.
@@ -29,7 +29,7 @@ understand a lot, and keep your own data. No subscription or hosted backend.
 
 ## Get Sprout
 
-Download the [0.2.0 preview](https://github.com/bee-san/sprout/releases/tag/0.2.0), or use the
+Download the [0.2.1 preview](https://github.com/bee-san/sprout/releases/tag/0.2.1), or use the
 [build workflow](https://github.com/bee-san/sprout/actions/workflows/build.yml), which produces `sprout-android` APKs and a `sprout-windows` portable ZIP. Open a
 successful run and download its artifacts. Android ARM64 is for modern phones;
 the x86_64 APK is for emulators. Windows needs the entire extracted ZIP,
@@ -172,11 +172,36 @@ If you change an already initialized Android client ID, restart the app first. A
 
 ## Backups and privacy
 
-Use **Settings → Save a portable backup** for a JSON snapshot of activities and
-sessions. Restore adds missing records and keeps existing ones; timers in a backup
-restore as finished sessions. Backups exclude Google credentials, local executable
-rules and sync tombstones. Use Drive sync for deletion propagation between live
-devices, and keep your backup somewhere safe.
+Use **Settings → Save a portable backup** and keep the JSON file on another
+device or in cloud storage. Sprout reads from a consistent database snapshot,
+adds a SHA-256 checksum and reads the saved document back before reporting success.
+Backups include time entries, activity names/colours/clients, tags, billable flags,
+preferences and Windows app rules. Your actual timer keeps running; its saved copy
+is finished at the snapshot time (or the last heartbeat for automatic tracking).
+
+**Restore a backup** previews the date, totals, additions and records with existing
+edits. Restore adds missing records in one transaction, keeps current edits and
+skips intentionally deleted records by default. You can explicitly recover deletions
+or restore device preferences and missing rules. Added Windows rules start disabled
+for review. Existing Google sign-in, installation identity and start at login stay intact.
+Sprout still reads older 0.2.0 backups.
+
+**Recovery copies** keeps the latest snapshot from each of seven saved days and
+eight copies from before imports, restores and deletions. Automatic copies refresh
+on startup, after changes, every five minutes while open, on Android pause and on
+normal Windows quit. If a safety copy cannot be written, the associated import,
+restore or deletion is cancelled without changing your records. Local copies live
+inside app storage and are lost when you uninstall or clear app data. Export a
+portable copy for protection against losing the device.
+
+If the database cannot open, the recovery screen lets you choose a saved copy or
+portable backup. Sprout builds and checks a replacement first, preserving the
+original database and its companion files in a separate recovery directory.
+See [backup and recovery instructions](docs/backup-recovery.md).
+
+Backup JSON is readable and contains personal time-tracking data. It excludes
+Google credentials, tokens, installation settings and sync tombstones. Use Drive
+sync for deletion propagation between live devices.
 
 No advertising, analytics SDK, screenshots, keystroke recording or Sprout server.
 Windows reads foreground/process executable identities for app rules. A matched

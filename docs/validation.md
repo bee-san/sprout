@@ -1,5 +1,48 @@
 # Validation record
 
+## 0.2.1 backup and recovery checks
+
+Checked on 4 October 2026 with the same Flutter/Dart/JDK toolchain below.
+
+- Flutter analysis has no issues; formatting is clean.
+- All **58 local tests** pass, including the owner's private CSV check. Public CI
+  runs **57 tests** without that file.
+- All **712 entries**, with exactly **2,868,154 seconds**, survive an independent
+  portable backup/restore round trip. Every session field is compared by ID;
+  re-restoring adds zero entries. A separate empty replica receives the CSV history
+  through the Drive protocol simulator.
+- Backup tests cover checksums, truncation, duplicate IDs, impossible dates,
+  missing activity references, legacy schema repair, original device attribution,
+  timer freezing, stale previews, rules/preferences, SQL rollback and unwritable
+  recovery storage. Deletion recovery converges between two replicas and Unicode
+  history survives JSON sync.
+- Filesystem tests cover staged/read-back export, replacement of an existing file,
+  failed publication, size limits, seven saved daily snapshots/eight safety copies,
+  concurrent saves, damaged-copy retention and a backwards wall clock.
+- Recovery tests preserve damaged databases and WAL/SHM companions, reject invalid
+  backups without touching originals, retain usable original databases, and verify
+  the replacement with SQLite `integrity_check`.
+- The restore dialog is checked at 320 logical pixels, Settings at 320/1360, and
+  the recovery screen exposes working confirmation/cancel and export controls.
+- The release x86_64 APK was installed on the API 35 emulator and compared
+  byte-for-byte with the built APK. Native CSV import adds two synthetic entries
+  totalling 7,200 seconds. Cancelling backup export leaves the saved-snapshot status
+  unchanged; successful export is independently SHA-256 checked and repeated
+  restore previews zero additions.
+- A deliberately damaged database header is detected before writable open.
+  Its entire file remains byte-for-byte unchanged on the recovery screen.
+  Recovering the local copy restores both synthetic entries and 7,200 seconds,
+  passes SQLite integrity, and preserves the damaged original exactly in its
+  recovery archive.
+
+The Windows build job runs the **27 backup/storage recovery tests** on Windows in
+addition to native compilation, portable packaging and startup/persistence checks.
+The [0.2.1 release](https://github.com/bee-san/sprout/releases/tag/0.2.1) records its
+source revision and hosted workflow result. Device and live-account limitations
+below still apply.
+
+## Original 0.2.0 checks
+
 Checked on 4 October 2026 using Flutter **3.44.4**, Dart **3.12.2**, JDK 17 and Android SDK 36.
 
 | Check | Result |

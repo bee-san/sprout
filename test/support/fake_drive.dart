@@ -72,7 +72,11 @@ class FakeDrive {
     }
     if (request.method == 'GET') {
       downloads++;
-      return http.Response(contents[uri.pathSegments.last]!, 200);
+      return http.Response.bytes(
+        utf8.encode(contents[uri.pathSegments.last]!),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
     }
     uploads++;
     String id;

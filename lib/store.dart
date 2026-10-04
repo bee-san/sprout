@@ -9,6 +9,69 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:uuid/uuid.dart';
 
 import 'model.dart';
+import 'portability.dart';
+
+class StoreSnapshot {
+  StoreSnapshot(this.entities, this.rules, this.preferences);
+  final List<Mutation> entities;
+  final List<AppRule> rules;
+  final Map<String, bool> preferences;
+  List<Activity> get activities => entities
+      .where((m) => m.kind == 'activity' && !m.deleted)
+      .map((m) => Activity.fromJson(m.data))
+      .toList();
+  List<Activity> get historicalActivities => entities
+      .where((m) => m.kind == 'activity' && m.data['name'] is String)
+      .map((m) => Activity.fromJson(m.data))
+      .toList();
+  List<Session> get sessions => entities
+      .where((m) => m.kind == 'session' && !m.deleted)
+      .map((m) => Session.fromJson(m.data))
+      .toList();
+  Set<String> deleted(String kind) => entities
+      .where((m) => m.kind == kind && m.deleted)
+      .map((m) => m.id)
+      .toSet();
+  String get revision => jsonEncode([
+    entities.map((m) => m.toJson()).toList(),
+    rules.map((r) => r.toJson()).toList(),
+    preferences,
+  ]);
+  String encode(DateTime now) {
+    final names = {for (final a in activities) a.id: a};
+    final referenced = {
+      ...sessions.map((s) => s.activityId),
+      ...rules.map((r) => r.activityId),
+    };
+    for (final id in referenced) {
+      if (names.containsKey(id)) continue;
+      final old = entities
+          .where((m) => m.kind == 'activity' && m.id == id)
+          .firstOrNull;
+      names[id] = old != null && old.data['name'] is String
+          ? Activity.fromJson(old.data)
+          : Activity(id: id, name: 'Recovered activity', color: 0xFF567561);
+    }
+    return encodeBackup(
+      names.values.toList(),
+      sessions,
+      now,
+      rules: rules,
+      preferences: preferences,
+    );
+  }
+
+  RestorePlan restorePlan(BackupData backup, RestoreOptions options) =>
+      planBackupRestore(
+        backup,
+        activities: activities,
+        sessions: sessions,
+        rules: rules,
+        deletedActivities: deleted('activity'),
+        deletedSessions: deleted('session'),
+        options: options,
+      );
+}
 
 /// Keep the original Windows preview's history and installation identity.
 String resolveDatabasePath(String supportPath, {bool legacyWindows = false}) {
@@ -29,6 +92,10 @@ class Store {
   final Database db;
   final String deviceId;
   final String deviceName;
+  static Future<String> defaultDatabasePath() async => resolveDatabasePath(
+    (await getApplicationSupportDirectory()).path,
+    legacyWindows: Platform.isWindows,
+  );
   static Future<Store> open({
     DatabaseFactory? factory,
     String? databasePath,
@@ -38,12 +105,26 @@ class Store {
       factory = databaseFactoryFfi;
     }
     factory ??= databaseFactorySqflitePlugin;
-    final dbPath =
-        databasePath ??
-        resolveDatabasePath(
-          (await getApplicationSupportDirectory()).path,
-          legacyWindows: Platform.isWindows,
-        );
+    final dbPath = databasePath ?? await defaultDatabasePath();
+    if (dbPath != inMemoryDatabasePath && await File(dbPath).exists()) {
+      // sqflite_android's read-only path supplies a non-destructive corruption
+      // handler. Its normal writable open uses Android's default handler, which
+      // can delete a damaged database. Check before entering that path.
+      final probe = await factory.openDatabase(
+        dbPath,
+        options: OpenDatabaseOptions(readOnly: true, singleInstance: false),
+      );
+      try {
+        final check = await probe.rawQuery('PRAGMA quick_check');
+        if (check.length != 1 || check.first.values.single != 'ok') {
+          throw StateError(
+            'Your database needs recovery. The original has been preserved.',
+          );
+        }
+      } finally {
+        await probe.close();
+      }
+    }
     final db = await factory.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
@@ -70,27 +151,129 @@ class Store {
         },
       ),
     );
-    final rows = await db.query(
-      'metadata',
-      where: 'key = ?',
-      whereArgs: ['deviceId'],
-    );
-    final device = rows.isEmpty
-        ? const Uuid().v4()
-        : rows.first['value'] as String;
-    final nameRows = await db.query(
-      'metadata',
-      where: 'key = ?',
-      whereArgs: ['deviceName'],
-    );
-    final name = nameRows.isEmpty
-        ? (Platform.isAndroid ? 'Android' : Platform.localHostname)
-        : nameRows.first['value'] as String;
-    final store = Store(db, device, name);
-    await store.setSetting('deviceId', device);
-    await store.setSetting('deviceName', name);
-    return store;
+    try {
+      final rows = await db.query(
+        'metadata',
+        where: 'key = ?',
+        whereArgs: ['deviceId'],
+      );
+      final device = rows.isEmpty
+          ? const Uuid().v4()
+          : rows.first['value'] as String;
+      final nameRows = await db.query(
+        'metadata',
+        where: 'key = ?',
+        whereArgs: ['deviceName'],
+      );
+      final name = nameRows.isEmpty
+          ? (Platform.isAndroid ? 'Android' : Platform.localHostname)
+          : nameRows.first['value'] as String;
+      final store = Store(db, device, name);
+      await store.setSetting('deviceId', device);
+      await store.setSetting('deviceName', name);
+      return store;
+    } catch (_) {
+      await db.close();
+      rethrow;
+    }
   }
+
+  Future<StoreSnapshot> snapshot() => db.transaction(_snapshot);
+  Future<StoreSnapshot> _snapshot(DatabaseExecutor txn) async {
+    final entities = (await txn.query('entities', orderBy: 'key'))
+        .map(
+          (row) =>
+              Mutation.fromJson(jsonDecode(row['payload'] as String) as Json),
+        )
+        .toList();
+    final rules = (await txn.query('rules', orderBy: 'rowid'))
+        .map(
+          (row) =>
+              AppRule.fromJson(jsonDecode(row['payload'] as String) as Json),
+        )
+        .toList();
+    final settings = {
+      for (final row in await txn.query('metadata'))
+        row['key'] as String: row['value'] as String,
+    };
+    return StoreSnapshot(entities, rules, {
+      'automatic': settings['automatic'] != 'false',
+      'notifications': settings['notifications'] != 'false',
+    });
+  }
+
+  /// Replan against a single, current database snapshot. A concurrent sync or
+  /// a stale preview must never let an import overwrite existing edits.
+  Future<ImportPlan> applyImport(
+    ImportPlan Function(StoreSnapshot) planner, {
+    Future<void> Function(StoreSnapshot)? beforeChange,
+  }) => db.transaction((txn) async {
+    final snapshot = await _snapshot(txn);
+    final plan = planner(snapshot);
+    final changes = plan is RestorePlan
+        ? plan.hasChanges
+        : plan.activities.isNotEmpty || plan.sessions.isNotEmpty;
+    if (!changes) return plan;
+    if (beforeChange != null) await beforeChange(snapshot);
+    for (final a in plan.activities) {
+      await _write(txn, 'activity', a.id, a.toJson());
+    }
+    for (final s in plan.sessions) {
+      await _write(txn, 'session', s.id, s.toJson());
+    }
+    if (plan is RestorePlan) {
+      for (final r in plan.rules) {
+        await txn.insert('rules', {
+          'id': r.id,
+          'payload': jsonEncode(r.toJson()),
+        });
+      }
+      for (final pref in plan.preferences.entries) {
+        await txn.insert('metadata', {
+          'key': pref.key,
+          'value': '${pref.value}',
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+    }
+    return plan;
+  });
+
+  Future<void> deleteSession(
+    String id, {
+    Future<void> Function(StoreSnapshot)? beforeChange,
+  }) => db.transaction((txn) async {
+    final snapshot = await _snapshot(txn);
+    final session = snapshot.sessions.where((s) => s.id == id).firstOrNull;
+    if (session == null) return;
+    if (beforeChange != null) await beforeChange(snapshot);
+    await _write(txn, 'session', id, session.toJson(), deleted: true);
+  });
+
+  Future<void> deleteActivity(
+    String id, {
+    Future<void> Function(StoreSnapshot)? beforeChange,
+  }) => db.transaction((txn) async {
+    final snapshot = await _snapshot(txn);
+    final activity = snapshot.activities.where((a) => a.id == id).firstOrNull;
+    if (activity == null) return;
+    if (beforeChange != null) await beforeChange(snapshot);
+    final now = DateTime.now();
+    for (final s in snapshot.sessions.where(
+      (s) => s.activityId == id && s.deviceId == deviceId && s.isRunning,
+    )) {
+      final end = now.isBefore(s.start) ? s.start : now;
+      await _write(
+        txn,
+        'session',
+        s.id,
+        s.copyWith(end: end, lastSeen: end).toJson(),
+      );
+    }
+    await _write(txn, 'activity', id, activity.toJson(), deleted: true);
+    for (final r in snapshot.rules.where((r) => r.activityId == id)) {
+      await txn.delete('rules', where: 'id = ?', whereArgs: [r.id]);
+    }
+  });
 
   Future<String?> setting(String key) async {
     final rows = await db.query('metadata', where: 'key = ?', whereArgs: [key]);

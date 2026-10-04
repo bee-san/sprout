@@ -72,6 +72,8 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter build windows --release
+      - name: Check backup and recovery on Windows
+        run: flutter test test/backup_restore_test.dart test/backup_vault_test.dart test/recovery_test.dart
       - name: Package Windows portable app
         shell: pwsh
         run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath sprout-windows.zip

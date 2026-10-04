@@ -85,8 +85,14 @@ class MainActivity : FlutterActivity() {
                             type = call.argument<String>("mimeType") ?: "text/csv"
                             putExtra(Intent.EXTRA_TITLE, call.argument<String>("name") ?: "sprout.csv")
                         }
-                        @Suppress("DEPRECATION")
-                        startActivityForResult(picker, EXPORT_REQUEST)
+                        try {
+                            @Suppress("DEPRECATION")
+                            startActivityForResult(picker, EXPORT_REQUEST)
+                        } catch (error: Exception) {
+                            pendingExport = null
+                            exportResult = null
+                            result.error("export", "Could not open the save dialog", null)
+                        }
                     }
                 }
                 else -> result.notImplemented()
@@ -162,19 +168,56 @@ class MainActivity : FlutterActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != EXPORT_REQUEST) return
-        try {
-            if (resultCode == RESULT_OK && data?.data != null) {
-                val stream = contentResolver.openOutputStream(data.data!!, "wt")
-                    ?: throw IllegalStateException("Could not open destination")
-                stream.use { it.write((pendingExport ?: "").toByteArray(Charsets.UTF_8)) }
-            }
-            exportResult?.success(null)
-        } catch (error: Exception) {
-            exportResult?.error("export", "Could not save CSV: ${error.message}", null)
-        } finally {
+        val result = exportResult ?: return
+        if (resultCode != RESULT_OK) {
             pendingExport = null
             exportResult = null
+            result.success(false)
+            return
         }
+        val uri = data?.data
+        val content = pendingExport
+        if (uri == null || content == null) {
+            pendingExport = null
+            exportResult = null
+            result.error("export", "No save destination was selected", null)
+            return
+        }
+        pendingExport = null
+        // Provider I/O can be slow (especially cloud documents). Keep it off
+        // the UI thread, and report success only after reading the bytes back.
+        Thread {
+            try {
+                val bytes = content.toByteArray(Charsets.UTF_8)
+                val stream = contentResolver.openOutputStream(uri, "wt")
+                    ?: throw IllegalStateException("Could not open destination")
+                stream.use { it.write(bytes); it.flush() }
+                val expected = MessageDigest.getInstance("SHA-256").digest(bytes)
+                val actual = MessageDigest.getInstance("SHA-256")
+                val input = contentResolver.openInputStream(uri)
+                    ?: throw IllegalStateException("Could not verify the saved document")
+                var total = 0L
+                input.use {
+                    val buffer = ByteArray(8192)
+                    while (true) {
+                        val count = it.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        if (total > bytes.size) throw IllegalStateException("Saved document verification failed")
+                        actual.update(buffer, 0, count)
+                    }
+                }
+                if (total != bytes.size.toLong() || !MessageDigest.isEqual(expected, actual.digest())) {
+                    throw IllegalStateException("Saved document verification failed")
+                }
+                runOnUiThread { exportResult = null; result.success(true) }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    exportResult = null
+                    result.error("export", "Could not save and verify the document. Choose another location. ${error.message}", null)
+                }
+            }
+        }.start()
     }
 
     companion object {

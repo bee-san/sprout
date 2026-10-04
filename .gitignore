@@ -58,6 +58,11 @@ client_secret*.json
 timebud-windows.zip
 sprout-windows.zip
 sprout-backup*.json
+sprout-daily-*.json
+sprout-import-*.json
+sprout-restore-*.json
+sprout-delete-*.json
+recovery-original-*/
 *.csv
 **/node_modules/
 docs/promo/.hyperframes/

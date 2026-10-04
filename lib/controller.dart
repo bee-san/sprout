@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as path;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart' show inMemoryDatabasePath;
 import 'package:uuid/uuid.dart';
 
 import 'drive_sync.dart';
@@ -11,12 +13,22 @@ import 'platform_bridge.dart';
 import 'store.dart';
 import 'portability.dart';
 import 'reporting.dart';
+import 'backups.dart';
 
 class Tracker extends ChangeNotifier {
-  Tracker(this.store, this.auth) : sync = DriveSync(store, auth);
+  Tracker(this.store, this.auth, {BackupVault? backups, DriveSync? drive})
+    : sync = drive ?? DriveSync(store, auth),
+      backups =
+          backups ??
+          (store.db.path == inMemoryDatabasePath
+              ? null
+              : BackupVault(
+                  Directory(path.join(path.dirname(store.db.path), 'backups')),
+                ));
   final Store store;
   final GoogleAuth auth;
   final DriveSync sync;
+  final BackupVault? backups;
   final PlatformBridge bridge = PlatformBridge();
   List<Activity> activities = [];
   List<Session> sessions = [];
@@ -26,13 +38,25 @@ class Tracker extends ChangeNotifier {
   bool automatic = true;
   bool startup = false;
   bool notifications = true;
+  String? backupError;
+  DateTime? lastRecoveryCopy;
+  DateTime? lastPortableBackup;
   DateTime now = DateTime.now();
   DateTime? _lastPoll;
   Timer? _clockTimer;
   Timer? _syncTimer;
+  Timer? _backupTimer;
+  Timer? _backupDebounce;
+  String? _backupRevision;
   Future<void> _queue = Future.value();
   bool _syncQueued = false;
   bool _closing = false;
+  bool _disposed = false;
+
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
 
   Session? get current {
     for (final s in sessions) {
@@ -69,6 +93,10 @@ class Tracker extends ChangeNotifier {
     notifications = await store.setting('notifications') != 'false';
     final last = await store.setting('lastSync');
     if (last != null) sync.lastSync = DateTime.tryParse(last)?.toLocal();
+    final exported = await store.setting('lastPortableBackup');
+    if (exported != null) {
+      lastPortableBackup = DateTime.tryParse(exported)?.toLocal();
+    }
     await reload();
     for (final s in sessions.where(
       (s) => s.deviceId == store.deviceId && s.source == 'auto' && s.isRunning,
@@ -91,6 +119,7 @@ class Tracker extends ChangeNotifier {
     });
     await _updatePlatform();
     await resume();
+    await createRecoveryCopy();
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       now = DateTime.now();
       notifyListeners();
@@ -105,6 +134,9 @@ class Tracker extends ChangeNotifier {
       const Duration(minutes: 2),
       (_) => unawaited(synchronize()),
     );
+    _backupTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+      unawaited(createRecoveryCopy());
+    });
     unawaited(synchronize());
   }
 
@@ -112,6 +144,12 @@ class Tracker extends ChangeNotifier {
     activities = await store.activities();
     sessions = await store.sessions();
     rules = await store.rules();
+    if (backups != null && !_closing) {
+      _backupDebounce?.cancel();
+      _backupDebounce = Timer(const Duration(seconds: 3), () {
+        unawaited(createRecoveryCopy());
+      });
+    }
     notifyListeners();
   }
 
@@ -175,11 +213,7 @@ class Tracker extends ChangeNotifier {
     await _updatePlatform();
   });
   Future<void> deleteActivity(Activity a) => _serial(() async {
-    if (current?.activityId == a.id) await _stopCurrent(DateTime.now());
-    await store.write('activity', a.id, a.toJson(), deleted: true);
-    for (final rule in rules.where((r) => r.activityId == a.id)) {
-      await store.deleteRule(rule.id);
-    }
+    await store.deleteActivity(a.id, beforeChange: _protect('delete'));
     await reload();
     await _updatePlatform();
   });
@@ -283,41 +317,117 @@ class Tracker extends ChangeNotifier {
   Future<ImportResult> importToggl(String csv) async {
     late ImportResult result;
     await _serial(() async {
-      final plan = planTogglImport(
-        csv,
-        activities: activities,
-        sessions: sessions,
-        deviceId: store.deviceId,
-        deviceName: store.deviceName,
+      final plan = await store.applyImport(
+        (snapshot) => planTogglImport(
+          csv,
+          activities: snapshot.historicalActivities,
+          sessions: snapshot.sessions,
+          deletedSessionIds: snapshot.deleted('session'),
+          deviceId: store.deviceId,
+          deviceName: store.deviceName,
+        ),
+        beforeChange: _protect('import'),
       );
-      await store.writeBatch({
-        'activity': plan.activities.map((a) => a.toJson()).toList(),
-        'session': plan.sessions.map((s) => s.toJson()).toList(),
-      });
-      result = ImportResult(plan.sessions.length, plan.skipped);
+      result = ImportResult(
+        plan.sessions.length,
+        plan.skipped,
+        activities: plan.activities.length,
+      );
       await reload();
       await _updatePlatform();
     });
     return result;
   }
 
-  String backup() => encodeBackup(activities, sessions, now);
+  Future<String> backup() async {
+    late String content;
+    await _serial(() async {
+      content = (await store.snapshot()).encode(DateTime.now());
+    });
+    return content;
+  }
 
-  Future<ImportResult> restore(String content) async {
+  Future<void> recordPortableBackup(DateTime time) async {
+    if (lastPortableBackup != null && !time.isAfter(lastPortableBackup!)) {
+      return;
+    }
+    await store.setSetting(
+      'lastPortableBackup',
+      time.toUtc().toIso8601String(),
+    );
+    lastPortableBackup = time;
+    notifyListeners();
+  }
+
+  Future<void> Function(StoreSnapshot)? _protect(String reason) =>
+      backups == null
+      ? null
+      : (snapshot) async {
+          try {
+            final copy = await backups!.save(
+              snapshot.encode(DateTime.now()),
+              reason,
+            );
+            lastRecoveryCopy = copy.data!.exportedAt;
+            backupError = null;
+          } catch (_) {
+            backupError =
+                'A recovery copy could not be saved. Check free space and try again.';
+            notifyListeners();
+            throw StateError('$backupError Your data has not been changed.');
+          }
+        };
+
+  Future<void> createRecoveryCopy({bool force = false}) => _serial(() async {
+    if (backups == null || (_closing && !force)) return;
+    try {
+      final snapshot = await store.snapshot();
+      final time = DateTime.now();
+      if (!force &&
+          snapshot.revision == _backupRevision &&
+          !snapshot.sessions.any((s) => s.isRunning)) {
+        return;
+      }
+      if (!force && lastRecoveryCopy != null) {
+        final elapsed = time.difference(lastRecoveryCopy!);
+        if (!elapsed.isNegative && elapsed < const Duration(minutes: 1)) {
+          _backupDebounce?.cancel();
+          _backupDebounce = Timer(
+            const Duration(minutes: 1) - elapsed,
+            () => unawaited(createRecoveryCopy()),
+          );
+          return;
+        }
+      }
+      final copy = await backups!.save(snapshot.encode(time), 'daily');
+      _backupRevision = snapshot.revision;
+      lastRecoveryCopy = copy.data!.exportedAt;
+      backupError = null;
+    } catch (_) {
+      backupError =
+          'Automatic backup could not be saved. Check free space or export a portable backup.';
+    }
+    notifyListeners();
+  });
+
+  Future<ImportResult> restore(
+    String content, {
+    RestoreOptions options = const RestoreOptions(),
+  }) async {
+    final backup = decodeBackup(content);
     late ImportResult result;
     await _serial(() async {
-      final plan = planRestore(
-        content,
-        activities: activities,
-        sessions: sessions,
-        deviceId: store.deviceId,
-        deviceName: store.deviceName,
+      final plan = await store.applyImport(
+        (snapshot) => snapshot.restorePlan(backup, options),
+        beforeChange: _protect('restore'),
       );
-      await store.writeBatch({
-        'activity': plan.activities.map((a) => a.toJson()).toList(),
-        'session': plan.sessions.map((s) => s.toJson()).toList(),
-      });
-      result = ImportResult(plan.sessions.length, plan.skipped);
+      result = ImportResult(
+        plan.sessions.length,
+        plan.skipped,
+        activities: plan.activities.length,
+      );
+      automatic = await store.setting('automatic') != 'false';
+      notifications = await store.setting('notifications') != 'false';
       await reload();
       await _updatePlatform();
     });
@@ -325,7 +435,7 @@ class Tracker extends ChangeNotifier {
   }
 
   Future<void> deleteSession(Session s) => _serial(() async {
-    await store.write('session', s.id, s.toJson(), deleted: true);
+    await store.deleteSession(s.id, beforeChange: _protect('delete'));
     await reload();
     await _updatePlatform();
   });
@@ -454,15 +564,22 @@ class Tracker extends ChangeNotifier {
     _closing = true;
     _clockTimer?.cancel();
     _syncTimer?.cancel();
+    _backupTimer?.cancel();
+    _backupDebounce?.cancel();
     await _serial(() => _stopCurrent(DateTime.now()));
+    await createRecoveryCopy(force: true);
     await _updatePlatform();
     await bridge.quit();
   }
 
   @override
   void dispose() {
+    _disposed = true;
+    _closing = true;
     _clockTimer?.cancel();
     _syncTimer?.cancel();
+    _backupTimer?.cancel();
+    _backupDebounce?.cancel();
     super.dispose();
   }
 }

@@ -151,6 +151,10 @@ void main() {
         'exportedAt',
         'activities',
         'sessions',
+        'rules',
+        'preferences',
+        'frozenTimers',
+        'checksum',
       });
       final restored = planRestore(
         backup,
@@ -165,7 +169,7 @@ void main() {
         const Duration(hours: 2),
       );
       expect(restored.sessions.last.tags, ['focus']);
-      expect(restored.sessions.last.deviceId, 'new');
+      expect(restored.sessions.last.deviceId, 'old');
       final again = planRestore(
         backup,
         activities: restored.activities,
@@ -194,6 +198,34 @@ void main() {
     expect(rows.last[9], 'focus; work');
     expect(rows.last[10], 'yes');
   });
+
+  test(
+    're-importing a CSV respects deliberately deleted entries and activities',
+    () async {
+      sqfliteFfiInit();
+      final store = await Store.open(
+        factory: databaseFactoryFfiNoIsolate,
+        databasePath: inMemoryDatabasePath,
+      );
+      final tracker = Tracker(store, GoogleAuth());
+      try {
+        await tracker.importToggl('$header$entry');
+        await tracker.deleteSession(tracker.sessions.single);
+        expect((await tracker.importToggl('$header$entry')).imported, 0);
+        await tracker.deleteActivity(tracker.activities.single);
+        final later = entry.replaceFirst(
+          '2026-01-02,09:00:00',
+          '2026-01-03,09:00:00',
+        );
+        expect((await tracker.importToggl('$header$entry$later')).imported, 1);
+        expect(tracker.activities, isEmpty);
+        expect(tracker.sessions.length, 1);
+      } finally {
+        tracker.dispose();
+        await store.close();
+      }
+    },
+  );
 
   // Opt in locally; a user's CSV is never a repository fixture.
   final localCsv = Platform.environment['SPROUT_TOGGL_CSV'];
@@ -242,6 +274,34 @@ void main() {
           final duplicate = await tracker.importToggl(csv);
           expect(duplicate.imported, 0);
           expect((await store.sessions()).length, result.sessions.length);
+          final backup = await tracker.backup();
+          final restoredStore = await Store.open(
+            factory: databaseFactoryFfiNoIsolate,
+            databasePath: inMemoryDatabasePath,
+          );
+          final restoredTracker = Tracker(restoredStore, GoogleAuth());
+          try {
+            final restored = await restoredTracker.restore(backup);
+            expect(restored.imported, result.sessions.length);
+            expect(
+              (await restoredStore.sessions()).fold<int>(
+                0,
+                (sum, s) => sum + s.duration(DateTime.now()).inSeconds,
+              ),
+              expectedSeconds,
+            );
+            expect((await restoredTracker.restore(backup)).imported, 0);
+            expect(
+              {
+                for (final s in await restoredStore.sessions())
+                  s.id: s.toJson(),
+              },
+              {for (final s in await store.sessions()) s.id: s.toJson()},
+            );
+          } finally {
+            restoredTracker.dispose();
+            await restoredStore.close();
+          }
           final driveA = DriveSync(
             store,
             FakeAuth(),

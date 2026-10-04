@@ -81,7 +81,7 @@ class DriveSync {
           'pageToken': ?page,
         }),
       );
-      final json = jsonDecode(response.body) as Json;
+      final json = jsonDecode(utf8.decode(response.bodyBytes)) as Json;
       result.addAll(
         (json['files'] as List).map((e) => Map<String, dynamic>.from(e as Map)),
       );
@@ -118,7 +118,7 @@ class DriveSync {
         if (response.bodyBytes.length > 32 * 1024 * 1024) {
           throw const FormatException('Sync journal is too large');
         }
-        final journal = jsonDecode(response.body) as Json;
+        final journal = jsonDecode(utf8.decode(response.bodyBytes)) as Json;
         if (journal['schema'] != 1 ||
             journal['device'] is! String ||
             journal['records'] is! List ||

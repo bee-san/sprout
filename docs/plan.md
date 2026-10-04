@@ -1,11 +1,11 @@
 # Sprout implementation and next checks
 
-Sprout 0.2.0 is a personal, offline time tracker for Android and Windows, with optional Google Drive app-data synchronization.
+Sprout 0.2.1 is a personal, offline time tracker for Android and Windows, with optional Google Drive app-data synchronization.
 
 ## Implemented
 
 - Shared tracking, atomic timer switching, running-session editing, descriptions, clients, tags and billable flags.
-- Toggl Detailed CSV import, full-session CSV export, portable JSON backups and additive restore.
+- Toggl Detailed CSV import, full-session CSV export, verified portable JSON backups, automatic recovery copies, additive restore and a database recovery screen.
 - Calendar ranges, search and activity/billable filters, daily/activity/tag reports, averages, busiest day, longest session and start-hour charts.
 - Native Android timer/activity and weekly stats widgets, timer notification and document-picker export.
 - Windows executable rules, focus/background tracking, idle pausing, lock/sleep handling, tray controls and startup.

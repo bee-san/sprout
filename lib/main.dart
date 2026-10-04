@@ -16,6 +16,9 @@ import 'portability.dart';
 import 'brand.dart';
 import 'dashboard_view.dart';
 import 'reports_view.dart';
+import 'backups.dart';
+import 'backup_ui.dart';
+import 'recovery_screen.dart';
 
 Future<T?> completedDialog<T>({
   required BuildContext context,
@@ -38,23 +41,25 @@ const palette = [
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  String? databasePath;
+  Store? store;
+  Tracker? tracker;
   try {
-    final tracker = Tracker(await Store.open(), GoogleAuth());
+    databasePath = await Store.defaultDatabasePath();
+    store = await Store.open(databasePath: databasePath);
+    tracker = Tracker(store, GoogleAuth());
     await tracker.initialize();
     runApp(Sprout(tracker: tracker));
   } catch (e) {
+    tracker?.dispose();
+    try {
+      await store?.close();
+    } catch (_) {}
     runApp(
-      MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: SelectableText(
-                'Sprout could not open your local data.\n\n$e\n\nRestart the app to try again. Your database has not been reset.',
-              ),
-            ),
-          ),
-        ),
+      RecoveryScreen(
+        databasePath: databasePath,
+        error: '$e',
+        onRecovered: main,
       ),
     );
   }
@@ -110,6 +115,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   DateTimeRange? customRange;
   String query = '';
   bool billableOnly = false;
+  String? dataAction;
   final searchController = TextEditingController();
   Tracker get t => widget.tracker;
   @override
@@ -128,6 +134,19 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) unawaited(t.resume());
+    if (state == AppLifecycleState.paused) {
+      unawaited(t.createRecoveryCopy(force: true));
+    }
+  }
+
+  Future<void> dataTask(String label, Future<void> Function() action) async {
+    if (dataAction != null) return;
+    setState(() => dataAction = label);
+    try {
+      await action();
+    } finally {
+      if (mounted) setState(() => dataAction = null);
+    }
   }
 
   Future<void> perform(Future<void> Function() action) async {
@@ -788,7 +807,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         child: ListTile(
           leading: const Icon(Icons.download_outlined),
           title: const Text('Export all sessions as CSV'),
-          onTap: () => perform(exportCsv),
+          onTap: dataAction == null
+              ? () => perform(() => dataTask('Exporting sessions…', exportCsv))
+              : null,
         ),
       ),
       Card(
@@ -798,15 +819,70 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           subtitle: const Text(
             'Bring your Detailed report CSV. Re-importing skips duplicates.',
           ),
-          onTap: () => perform(importToggl),
+          onTap: dataAction == null
+              ? () =>
+                    perform(() => dataTask('Importing your time…', importToggl))
+              : null,
+        ),
+      ),
+      const SizedBox(height: 16),
+      Card(
+        color: const Color(0xFFE9EFE6),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'A little peace of mind',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                t.lastPortableBackup == null
+                    ? 'Save a portable backup to keep your garden safe outside this app.'
+                    : 'Latest exported snapshot: ${DateFormat.yMMMd().add_jm().format(t.lastPortableBackup!)}',
+              ),
+              const SizedBox(height: 8),
+              Text(
+                t.lastRecoveryCopy == null
+                    ? 'Automatic recovery copies are created while Sprout is open.'
+                    : 'Recovery copy: ${DateFormat.yMMMd().add_jm().format(t.lastRecoveryCopy!)}',
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Keep a portable copy on another device or in cloud storage. Local recovery copies are lost if you uninstall or clear app data.',
+              ),
+              if (t.backupError != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text(
+                    t.backupError!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+              if (dataAction != null) ...[
+                const SizedBox(height: 16),
+                const LinearProgressIndicator(),
+                const SizedBox(height: 8),
+                Text(dataAction!),
+              ],
+            ],
+          ),
         ),
       ),
       Card(
         child: ListTile(
           leading: const Icon(Icons.backup_outlined),
           title: const Text('Save a portable backup'),
-          subtitle: const Text('Activities and sessions as JSON.'),
-          onTap: () => perform(saveBackup),
+          subtitle: const Text(
+            'Verified JSON with your time, activity names, preferences and app rules.',
+          ),
+          onTap: dataAction == null
+              ? () => perform(() => dataTask('Saving your backup…', saveBackup))
+              : null,
         ),
       ),
       Card(
@@ -816,7 +892,25 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           subtitle: const Text(
             'Add missing records while keeping existing entries.',
           ),
-          onTap: () => perform(restoreBackup),
+          onTap: dataAction == null
+              ? () => perform(
+                  () => dataTask('Reviewing your backup…', restoreBackup),
+                )
+              : null,
+        ),
+      ),
+      Card(
+        child: ListTile(
+          leading: const Icon(Icons.shield_outlined),
+          title: const Text('Recovery copies'),
+          subtitle: const Text(
+            'Automatic copies for 7 days, plus 8 copies before imports, restores and deletions.',
+          ),
+          onTap: dataAction == null
+              ? () => perform(
+                  () => dataTask('Opening recovery copies…', recoveryCopies),
+                )
+              : null,
         ),
       ),
       if (Platform.isAndroid)
@@ -836,7 +930,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       ),
       const SizedBox(height: 6),
       const Text(
-        'Sprout 0.2.0 · Local storage · No subscription',
+        'Sprout 0.2.1 · Local storage · No subscription',
         style: TextStyle(color: Color(0xFF696D67)),
       ),
     ],
@@ -1356,20 +1450,21 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     executable.dispose();
   }
 
-  Future<void> saveDocument(
+  Future<bool> saveDocument(
     String name,
     String content,
     String mime,
     String extension,
   ) async {
     if (Platform.isAndroid) {
-      await const MethodChannel(
-        'dev.beesan.timebud/platform',
-      ).invokeMethod<void>('exportDocument', {
-        'name': name,
-        'content': content,
-        'mimeType': mime,
-      });
+      return await const MethodChannel(
+            'dev.beesan.timebud/platform',
+          ).invokeMethod<bool>('exportDocument', {
+            'name': name,
+            'content': content,
+            'mimeType': mime,
+          }) ??
+          false;
     } else {
       final location = await getSaveLocation(
         suggestedName: name,
@@ -1378,32 +1473,66 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         ],
       );
       if (location != null) {
-        await XFile.fromData(
-          Uint8List.fromList(utf8.encode(content)),
-          mimeType: mime,
-          name: name,
-        ).saveTo(location.path);
+        await writeVerifiedDocument(
+          File(location.path),
+          content,
+          backup: extension == 'json',
+        );
+        return true;
       }
+      return false;
     }
   }
 
-  Future<void> exportCsv({bool filtered = false}) => saveDocument(
-    'sprout-${DateFormat('yyyy-MM-dd').format(DateTime.now())}.csv',
-    exportSessionsCsv(
-      filtered ? visibleSessions : t.sessions,
-      t.activityName,
-      t.now,
-    ),
-    'text/csv',
-    'csv',
-  );
+  Future<void> exportCsv({bool filtered = false}) async {
+    final saved = await saveDocument(
+      'sprout-${DateFormat('yyyy-MM-dd').format(DateTime.now())}.csv',
+      exportSessionsCsv(
+        filtered ? visibleSessions : t.sessions,
+        t.activityName,
+        t.now,
+      ),
+      'text/csv',
+      'csv',
+    );
+    if (saved && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('CSV saved and verified.')));
+    }
+  }
 
-  Future<void> saveBackup() => saveDocument(
-    'sprout-backup-${DateFormat('yyyy-MM-dd').format(DateTime.now())}.json',
-    t.backup(),
-    'application/json',
-    'json',
-  );
+  Future<void> saveBackup() async {
+    await exportBackup(await t.backup());
+  }
+
+  Future<void> exportBackup(String content) async {
+    final data = decodeBackup(content);
+    final saved = await saveDocument(
+      'sprout-backup-${DateFormat('yyyy-MM-dd-HHmmss').format(data.exportedAt)}.json',
+      content,
+      'application/json',
+      'json',
+    );
+    if (!saved) return;
+    await t.recordPortableBackup(data.exportedAt);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Backup saved and verified: ${data.sessions.length} entries, ${data.activities.length} activities.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<String> readImportFile(XFile file) async {
+    if (await file.length() > maxPortableBytes) {
+      throw const FormatException('Choose a file smaller than 32 MB.');
+    }
+    return file.readAsString();
+  }
 
   Future<bool> approveImport(String title, String message, String verb) async =>
       await completedDialog<bool>(
@@ -1432,7 +1561,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       ],
     );
     if (file == null) return;
-    final content = await file.readAsString();
+    final content = await readImportFile(file);
     final plan = planTogglImport(
       content,
       activities: t.activities,
@@ -1469,32 +1598,119 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       ],
     );
     if (file == null) return;
-    final content = await file.readAsString();
-    final plan = planRestore(
-      content,
-      activities: t.activities,
-      sessions: t.sessions,
-      deviceId: t.store.deviceId,
-      deviceName: t.store.deviceName,
+    await restoreContent(await readImportFile(file), file.name);
+  }
+
+  Future<void> restoreContent(String content, String fileName) async {
+    final data = decodeBackup(content);
+    final snapshot = await t.store.snapshot();
+    if (!mounted) return;
+    final options = await completedDialog<RestoreOptions>(
+      context: context,
+      builder: (_) => RestorePreviewDialog(
+        backup: data,
+        snapshot: snapshot,
+        fileName: fileName,
+      ),
     );
-    if (!mounted ||
-        !await approveImport(
-          'Restore your garden',
-          'Add ${plan.sessions.length} missing entries and ${plan.activities.length} activities. '
-              'Existing entries are kept. Backed-up timers are restored as finished sessions. Google credentials and app rules stay on this device.',
-          'Restore',
-        )) {
-      return;
-    }
-    final result = await t.restore(content);
+    if (options == null || !mounted) return;
+    final result = await t.restore(content, options: options);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Restored ${result.imported} entries; kept ${result.skipped} existing entries.',
+            'Restored ${result.imported} entries and ${result.activities} activities; kept ${result.skipped} existing or deleted entries.',
           ),
         ),
       );
+    }
+  }
+
+  Future<void> recoveryCopies() async {
+    final vault = t.backups;
+    if (vault == null) return;
+    final copies = await vault.list();
+    if (!mounted) return;
+    final selected = await completedDialog<(String, LocalBackup)>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Recovery copies'),
+        content: SizedBox(
+          width: 500,
+          height: 420,
+          child: copies.isEmpty
+              ? const Center(
+                  child: Text(
+                    'Your first recovery copy will appear here while Sprout is open.',
+                  ),
+                )
+              : ListView(
+                  children: copies
+                      .map(
+                        (copy) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                copy.label,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              if (copy.data != null) ...[
+                                Text(
+                                  DateFormat.yMMMd().add_jm().format(
+                                    copy.data!.exportedAt,
+                                  ),
+                                ),
+                                Text(
+                                  '${copy.data!.sessions.length} entries · ${copy.data!.activities.length} activities',
+                                ),
+                                Wrap(
+                                  spacing: 8,
+                                  children: [
+                                    TextButton.icon(
+                                      onPressed: () =>
+                                          Navigator.pop(ctx, ('restore', copy)),
+                                      icon: const Icon(Icons.restore, size: 18),
+                                      label: const Text('Restore'),
+                                    ),
+                                    TextButton.icon(
+                                      onPressed: () =>
+                                          Navigator.pop(ctx, ('export', copy)),
+                                      icon: const Icon(
+                                        Icons.save_alt,
+                                        size: 18,
+                                      ),
+                                      label: const Text('Export'),
+                                    ),
+                                  ],
+                                ),
+                              ] else
+                                Text(copy.error!),
+                              const Divider(),
+                            ],
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+    if (selected == null || !mounted) return;
+    final content = await readPortableFile(selected.$2.file);
+    if (selected.$1 == 'export') {
+      await exportBackup(content);
+    } else {
+      await restoreContent(content, selected.$2.label);
     }
   }
 
