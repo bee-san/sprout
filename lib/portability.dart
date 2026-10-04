@@ -145,6 +145,7 @@ ImportPlan planTogglImport(
   final knownActivities = {
     for (final a in activities) _activityKey(a.name, a.client): a,
   };
+  final activitiesById = {for (final a in activities) a.id: a};
   final knownSessions = sessions.map((s) => s.id).toSet();
   final addedActivities = <Activity>[];
   final addedSessions = <Session>[];
@@ -218,8 +219,12 @@ ImportPlan planTogglImport(
       }
       final key = _activityKey(project, client);
       final activity = knownActivities.putIfAbsent(key, () {
+        final projectId = _id('project', key);
+        // Later exports retain local names, clients and colours after a rename.
+        final existing = activitiesById[projectId];
+        if (existing != null) return existing;
         final a = Activity(
-          id: _id('project', key),
+          id: projectId,
           name: project,
           client: client,
           color: [

@@ -63,7 +63,7 @@ billable flags are retained. Blank projects become **Unassigned**. Duration is
 authoritative, so source endpoint rounding and DST changes do not change elapsed time.
 
 Every row is checked before anything is written, then the import commits in one
-transaction. Existing entries stay intact. Re-importing the same export skips
+transaction. Existing entries and local edits to imported activities stay intact. Re-importing the same export skips
 already imported entries; identical rows within an export are retained individually.
 An edited export can produce new entries because Toggl CSV does not contain stable
 entry IDs. Use overlapping exports with consistent data and timezone settings.

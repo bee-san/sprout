@@ -8,6 +8,7 @@ Sprout starts from the user's Timebud 0.1.0 Flutter preview. This review led to 
 | Timer switching used separate writes and could leave an incomplete switch | Close the previous timer and create the next inside one transaction | A database trigger forces an insertion failure; the original running timer survives rollback in `test/store_test.dart` |
 | Editing a running session could finish it accidentally | Keep timer running is enabled by default, with a separate stop action | Controller regression coverage and the session editor |
 | Toggl history could not be brought into the app | Validated Detailed CSV import with stable repeat-import IDs and occurrence counts | `test/portability_test.dart`; local private export checked separately |
+| Later CSV exports could reset a renamed imported activity | Reuse its stable project ID while keeping local name, client and colour edits | Controller import regression in `test/portability_test.dart` |
 | Project client, tags and billable metadata were missing | Add backward-compatible fields, filters, export and backup support | Import, model and controller tests |
 | Reports were limited and had no coherent shared filter controls | Add calendar ranges, daily/activity/tag charts, averages, starts by hour and comparable previous periods | `test/reporting_test.dart`; responsive UI checks at 320, 390 and 1360 logical pixels |
 | Android had no home-screen controls or stats | Add native RemoteViews timer/activity and weekly stats widgets | Android compilation and emulator checks recorded in `validation.md` |

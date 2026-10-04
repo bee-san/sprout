@@ -94,6 +94,39 @@ void main() {
   );
 
   test(
+    'later Toggl exports retain local edits to imported activities',
+    () async {
+      sqfliteFfiInit();
+      final store = await Store.open(
+        factory: databaseFactoryFfiNoIsolate,
+        databasePath: inMemoryDatabasePath,
+      );
+      final tracker = Tracker(store, GoogleAuth());
+      try {
+        await tracker.importToggl('$header$entry');
+        final id = tracker.activities.single.id;
+        await tracker.addActivity('My design', 42, id: id, client: 'My studio');
+        final later = entry.replaceFirst(
+          '2026-01-02,09:00:00',
+          '2026-01-03,09:00:00',
+        );
+        final result = await tracker.importToggl('$header$entry$later');
+        expect(result.imported, 1);
+        expect(result.skipped, 1);
+        expect(tracker.activities.length, 1);
+        expect(tracker.activities.single.name, 'My design');
+        expect(tracker.activities.single.client, 'My studio');
+        expect(tracker.activities.single.color, 42);
+        expect(tracker.sessions.length, 2);
+        expect(tracker.sessions.every((s) => s.activityId == id), isTrue);
+      } finally {
+        tracker.dispose();
+        await store.close();
+      }
+    },
+  );
+
+  test(
     'portable backup freezes active timers and preserves metadata without account secrets',
     () {
       final imported = plan('$header$entry');

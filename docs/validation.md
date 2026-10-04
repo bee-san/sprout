@@ -6,7 +6,7 @@ Checked on 4 October 2026 using Flutter **3.44.4**, Dart **3.12.2**, JDK 17 and 
 | --- | --- |
 | Flutter analysis | No issues |
 | Dart formatting for `lib/` and `test/` | Clean |
-| Automated tests, including the private local Toggl check | All 26 passed |
+| Automated tests, including the private local Toggl check | All 27 passed |
 | Toggl export supplied locally by the owner | All 712 rows imported; total duration exactly 2,868,154 seconds; repeating the import adds zero rows |
 | Import then sync to a second replica | All 712 entries converge through the Drive protocol simulator with descriptions/tags/client/billable metadata retained |
 | Responsive Flutter UI | Track and Reports checked at 320, 390 and 1360 logical pixels, with bundled fonts and Material icons |
@@ -26,7 +26,7 @@ Checked on 4 October 2026 using Flutter **3.44.4**, Dart **3.12.2**, JDK 17 and 
 
 Transactional timer switching and rollback, running-session editing, continuation metadata, local persistence, logical clocks, overlap detection, automatic-session heartbeat limits, executable rules and mobile add/start/stop/history behavior.
 
-Imports cover BOMs, quoted and multiline CSV cells, clients, tasks, tags, billable flags, timezone offsets, midnight crossings, invalid input, exact durations and repeated imports. JSON backup/restore freezes active timers and preserves metadata without account credentials. CSV output protects formula-like values.
+Imports cover BOMs, quoted and multiline CSV cells, clients, tasks, tags, billable flags, timezone offsets, midnight crossings, invalid input, exact durations, repeated imports and retaining local activity edits when later exports are imported. JSON backup/restore freezes active timers and preserves metadata without account credentials. CSV output protects formula-like values.
 
 The Drive simulator exercises pagination, unchanged journal checksums, offline recovery, authorization refresh, temporary API failure retries, local writes during upload, invalid journals, deterministic concurrent edit convergence, stopped timers and deletion propagation without revival. Network failures do not mark unuploaded changes as synced.
 
@@ -38,7 +38,7 @@ The owner's CSV stays outside the repository. Its extra validation test is opt-i
 SPROUT_TOGGL_CSV=/path/to/private-export.csv flutter test test/portability_test.dart
 ```
 
-Normal public CI runs the other 25 tests without that private file.
+Normal public CI runs the other 26 tests without that private file.
 
 ## Device and account boundaries
 
