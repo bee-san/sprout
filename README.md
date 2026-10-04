@@ -35,12 +35,13 @@ successful run and download its artifacts. Android ARM64 is for modern phones;
 the x86_64 APK is for emulators. Windows needs the entire extracted ZIP,
 including its DLLs and `data` folder. Run `sprout.exe`.
 
-These are personal preview builds. Android uses a development signing key
-unless release signing is configured; separate CI runs may use different keys.
-For updates without uninstalling, build with a stable signing key. Back up your
-history before replacing an installation. See [Android signing](docs/android-signing.md).
+These are personal preview builds. This repository uses a stable Android signing
+key held in encrypted Actions secrets, so its published APKs can update one another.
+Forks without signing secrets fall back to a development key; separate clean CI runs
+can then use different keys. Back up your history before replacing an installation.
+See [Android signing](docs/android-signing.md).
 
-Android requires Android 7 / API 24 or later. Windows targets x64. Native Windows
+Android requires Android 7 / API 24 or later. Windows targets Windows 10/11 x64 and bundles the Visual C++ runtime DLLs with the portable app. Native Windows
 app automation is available only on Windows. Linux and macOS are outside this release.
 
 ## Bring your time from Toggl

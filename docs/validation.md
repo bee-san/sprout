@@ -15,7 +15,10 @@ Checked on 4 October 2026 using Flutter **3.44.4**, Dart **3.12.2**, JDK 17 and 
 | Android startup on API 35 emulator | Installed release APK launches; the original Android SQLite PRAGMA failure is fixed |
 | Hyperframes composition | Check passes: zero runtime, layout and motion errors; 50/50 text contrast checks pass; one advisory composition-structure warning |
 | README GIF | 960×540, 180 frames, 15 fps, 12 seconds, loops continuously; actual app screenshots with synthetic data |
-| Hosted Android / Windows builds | Recorded after the first public CI run below |
+| Hosted Android / Windows builds | First public workflow passed all three jobs; run linked below |
+| Android timer widget | Added through Pixel Launcher; activity start and session stop both persist in the app |
+| Android process recovery | Editing retains a running timer; killing the process and relaunching retains the same session ID and start timestamp |
+| Android document export | JSON backup saved through the system picker; all 4 synthetic activities and 14 snapshot sessions present |
 
 ## What the tests exercise
 
@@ -41,10 +44,14 @@ The Android emulator is an isolated API 35 Pixel profile. Device checks use synt
 
 Live Google sign-in and real Drive API synchronization require the owner's OAuth clients and account; these were not available in this environment. The simulator verifies application protocol behavior, not Google's authorization configuration.
 
-This Linux workspace cannot run the Windows GUI. A successful hosted Windows native build confirms compilation and packaging. Focus tracking, idle/lock/sleep handling, tray controls and startup require a Windows runtime check.
+This Linux workspace cannot run the Windows GUI. The hosted Windows workflow checks native compilation, portable packaging and basic startup/persistence on its runner. Interactive focus tracking, idle/lock/sleep handling, tray controls and startup at login require checking on the owner’s Windows machine.
 
-Android preview APKs use a development signing key. Use a stable release key for long-term updates and register its fingerprint for Android Google sign-in; see [Android signing](android-signing.md).
+Published Android preview APKs use this repository’s stable release key, stored privately and in encrypted Actions secrets. Local builds or forks without that configuration use a development key. Register the installed APK’s fingerprint for Android Google sign-in; see [Android signing](android-signing.md).
 
 ## Public build evidence
 
-The repository and workflow run links are added after publication. The status badge in the README follows the current main branch.
+Public repository: [bee-san/sprout](https://github.com/bee-san/sprout).
+
+The [first hosted workflow](https://github.com/bee-san/sprout/actions/runs/37195228158) passed checks, ARM64/x86_64 Android builds and the native Windows build for `b2bd782f9ce7528ed8124dd3fc3540391a3ee643`. Its Windows ZIP was downloaded and CRC-checked. Packaging was then improved to bundle the compiler runtime DLLs and check startup/SQLite integrity from the extracted archive; that check runs in the current main workflow.
+
+The README status badge follows the current main branch. The build's source SHA and artifacts are available on each workflow run.

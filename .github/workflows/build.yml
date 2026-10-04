@@ -75,6 +75,32 @@ jobs:
       - name: Package Windows portable app
         shell: pwsh
         run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath sprout-windows.zip
+      - name: Check extracted Windows portable app
+        shell: pwsh
+        run: |
+          $sproutProbe = Join-Path $env:RUNNER_TEMP 'sprout-portable-check'
+          Expand-Archive sprout-windows.zip -DestinationPath $sproutProbe
+          foreach ($required in @('sprout.exe', 'flutter_windows.dll', 'sqlite3.dll', 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll', 'data/app.so')) {
+            if (-not (Test-Path (Join-Path $sproutProbe $required))) { throw "Missing portable file: $required" }
+          }
+          $sproutProcess = Start-Process (Join-Path $sproutProbe 'sprout.exe') -ArgumentList '--tray' -WorkingDirectory $sproutProbe -PassThru
+          try {
+            Start-Sleep -Seconds 10
+            $sproutProcess.Refresh()
+            if ($sproutProcess.HasExited) { throw "Sprout exited during startup: $($sproutProcess.ExitCode)" }
+            $sproutData = Join-Path $env:APPDATA 'dev.beesan/Sprout/timebud.sqlite'
+            if (-not (Test-Path $sproutData)) { throw 'Sprout did not initialize its database' }
+            @'
+          import sqlite3, sys
+          db = sqlite3.connect(sys.argv[1])
+          assert db.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
+          assert db.execute("SELECT count(*) FROM metadata WHERE key IN ('deviceId','deviceName')").fetchone()[0] == 2
+          print('Portable Windows startup and SQLite integrity passed')
+          '@ | python - $sproutData
+            if ($LASTEXITCODE -ne 0) { throw 'Windows persistence check failed' }
+          } finally {
+            if (-not $sproutProcess.HasExited) { Stop-Process -Id $sproutProcess.Id -Force }
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: sprout-windows
