@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=1280,height=720"/>
+<title>Sprout — your little garden of time</title>
+<script src="assets/gsap.min.js"></script>
+<style>
+@font-face{font-family:Nunito;src:url('assets/Nunito.ttf') format('truetype');font-weight:200 1000;font-display:block}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#faf8f3}
+#sprout-demo{position:relative;width:100%;height:100%;overflow:hidden;color:#24372c;font-family:Nunito,sans-serif;--bg:transparent;--fg:#24372c;--surface:#faf8f3;--brand:#355e49;--border:#b3c2ab;--muted:#53624b;--font-body:Nunito;--font-mono:Nunito}
+.clip{position:absolute;inset:0}.orb{position:absolute;border-radius:50%;background:#e9efe6}.orb.one{width:580px;height:580px;right:-80px;top:-110px}.orb.two{width:360px;height:360px;left:420px;bottom:-180px;background:#f1e3dc}
+#brand{position:absolute;left:64px;top:52px;display:flex;align-items:center;gap:16px}#planter{width:82px;height:82px}#wordmark{font-size:66px;font-weight:900;letter-spacing:-3px;margin:0}
+#copy{position:absolute;left:74px;top:231px;width:370px}h1{font-size:62px;line-height:1.2;letter-spacing:-2.6px;margin:0;font-weight:900}h1 span{display:block}#garden{color:#355e49}#subline span{display:block}#subline{font-size:24px;line-height:1.4;margin:24px 0 0;width:310px}
+#labels{position:absolute;left:74px;bottom:82px;display:flex;gap:10px;flex-wrap:wrap;width:365px}.pill{border:1px solid #b3c2ab;border-radius:100px;padding:8px 14px;font-size:17px;font-weight:700;background:#faf8f3}
+#browser-device-stage{position:absolute;left:444px;top:114px;width:796px;height:534px;z-index:2}
+#phone{position:absolute;right:67px;top:263px;width:182px;height:392px;border:7px solid #355e49;border-radius:28px;background:#355e49;box-shadow:0 20px 40px #24372c20;overflow:hidden;z-index:3}#phone img{display:block;width:100%;height:100%;object-fit:cover;object-position:top}#phone .notch{position:absolute;top:3px;left:58px;width:54px;height:7px;border-radius:8px;background:#355e49}
+#footer{position:absolute;left:74px;bottom:31px;font-size:14px;color:#53624b;letter-spacing:.7px}
+</style>
+</head>
+<body>
+<div id="sprout-demo" data-composition-id="sprout-demo" data-start="0" data-width="1280" data-height="720" data-duration="12">
+<section id="brand-scene" class="clip" data-start="0" data-duration="12" data-track-index="0">
+<div class="orb one" data-layout-allow-overflow aria-hidden="true"></div><div class="orb two" data-layout-allow-overflow aria-hidden="true"></div>
+<div id="brand"><img id="planter" src="assets/sprout.svg" alt="A smiling sprout in a pot"/><p id="wordmark">Sprout</p></div>
+<div id="copy"><h1><span>Your time.</span><span id="garden">Your little</span><span>garden.</span></h1><p id="subline"><span>Track a little.</span><span>Understand a lot.</span></p></div>
+<div id="labels"><span class="pill">Android + Windows</span><span class="pill">Offline first</span><span class="pill">Your data, yours</span></div>
+<p id="footer">A FRIENDLIER PLACE FOR YOUR TIME</p>
+<div id="phone"><img src="assets/phone-track.png" alt="Sprout's activity tracking screen"/><span class="notch"></span></div>
+</section>
+<div id="browser-device-stage" data-composition-id="browser-device-stage" class="clip" data-start="0" data-duration="12" data-track-index="1" data-width="796" data-height="534" data-composition-src="compositions/components/browser-device-stage.html" data-variable-values='{"chrome":"window","title":"Sprout · your garden of time","swap_at":4.8,"exit":"none"}'></div>
+</div>
+<template data-slot="browser-device-stage-screen"><img src="assets/desktop-track.png" alt="Sprout tracking activities"/></template>
+<template data-slot="browser-device-stage-screen-b"><img src="assets/desktop-reports.png" alt="Sprout's reports and daily statistics"/></template>
+<script>
+const tl=gsap.timeline({paused:true});
+tl.fromTo('#planter',{rotation:-8,scale:.94},{rotation:5,scale:1.06,duration:3,ease:'sine.inOut',yoyo:true,repeat:3},0);
+tl.fromTo('.orb.one',{x:0,y:0},{x:-28,y:16,duration:6,ease:'sine.inOut',yoyo:true,repeat:1},0);
+tl.fromTo('.orb.two',{x:0,y:0},{x:24,y:-14,duration:6,ease:'sine.inOut',yoyo:true,repeat:1},0);
+tl.fromTo('#phone',{y:16,rotation:2},{y:0,rotation:0,duration:1,ease:'power3.out'},.15);
+tl.to('#phone',{y:16,rotation:2,duration:1,ease:'power3.inOut'},11);
+tl.fromTo('#garden',{color:'#355e49'},{color:'#567561',duration:3,ease:'sine.inOut',yoyo:true,repeat:3},0);
+window.__timelines=window.__timelines||{};window.__timelines['sprout-demo']=tl;tl.seek(0);
+</script>
+</body>
+</html>

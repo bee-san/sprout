@@ -1,0 +1,6 @@
+<resources>
+    <string name="widget_timer_name">Timer &amp; activities</string>
+    <string name="widget_stats_name">Weekly stats</string>
+    <string name="widget_timer_description">Start an activity or stop your active Sprout timer.</string>
+    <string name="widget_stats_description">Your tracked time today and this week.</string>
+</resources>
